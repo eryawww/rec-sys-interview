@@ -1,1 +1,169 @@
-<!doctype html><title>Recommender</title><h1>placeholder</h1>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Recommender</title>
+<style>
+  :root {
+    --bg: #0f1115; --card: #181b22; --line: #262a33;
+    --fg: #e8eaed; --muted: #9aa0aa; --accent: #7aa2f7;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1000px; margin: 0 auto; padding: 32px 20px 80px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+  h2 { font-size: 15px; text-transform: uppercase; letter-spacing: .08em;
+       color: var(--muted); margin: 36px 0 14px; }
+  .grid { display: grid; gap: 12px;
+          grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+  .card { background: var(--card); border: 1px solid var(--line);
+          border-radius: 10px; padding: 14px; }
+  .title { font-weight: 600; margin-bottom: 6px; }
+  .meta { color: var(--muted); font-size: 12px; text-transform: capitalize; }
+  .reason { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
+            font-size: 13px; color: var(--muted); }
+  .reason.llm { color: var(--fg); }
+  .picker { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  input, select {
+    background: var(--card); color: var(--fg); border: 1px solid var(--line);
+    border-radius: 8px; padding: 9px 12px; font: inherit; min-width: 260px;
+  }
+  select { min-width: 90px; }
+  .banner { background: #2b2415; border: 1px solid #4a3d1d; color: #e8d9a8;
+            border-radius: 8px; padding: 10px 12px; font-size: 13px; margin-bottom: 14px; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Recommender</h1>
+  <div class="sub" id="algo">&nbsp;</div>
+
+  <h2>Popular now</h2>
+  <div class="grid" id="popular"></div>
+
+  <h2>Recommended for a viewer</h2>
+  <div class="picker">
+    <input id="user" list="users" placeholder="Type a name or user id, e.g. u1 or Sari"
+           autocomplete="off">
+    <datalist id="users"></datalist>
+    <select id="k">
+      <option>5</option><option selected>10</option><option>20</option>
+    </select>
+  </div>
+  <div class="note" id="status"></div>
+  <div id="personal"></div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let users = [];
+
+const card = (item) => {
+  const el = document.createElement("div");
+  el.className = "card";
+  el.dataset.itemId = item.item_id;
+  el.innerHTML =
+    `<div class="title"></div>
+     <div class="meta"></div>
+     <div class="reason"></div>`;
+  el.querySelector(".title").textContent = item.title;
+  el.querySelector(".meta").textContent = `${item.content_type} · ${item.genre}`;
+  el.querySelector(".reason").textContent = item.reason;
+  return el;
+};
+
+const grid = (items) => {
+  const g = document.createElement("div");
+  g.className = "grid";
+  items.forEach((item) => g.appendChild(card(item)));
+  return g;
+};
+
+async function loadPopular() {
+  const body = await (await fetch("/popular?k=10")).json();
+  $("algo").textContent = `Serving algorithm: ${body.algorithm}`;
+  $("popular").replaceChildren(...[...grid(body.items).children]);
+}
+
+async function loadUsers() {
+  users = await (await fetch("/users")).json();
+  const list = $("users");
+  users.forEach((u) => {
+    const opt = document.createElement("option");
+    opt.value = u.user_id;
+    opt.label = `${u.name} — ${u.region}`;
+    list.appendChild(opt);
+  });
+}
+
+function resolveUserId(raw) {
+  const text = raw.trim();
+  if (!text) return null;
+  const byId = users.find((u) => u.user_id.toLowerCase() === text.toLowerCase());
+  if (byId) return byId.user_id;
+  const byName = users.find((u) => u.name.toLowerCase() === text.toLowerCase());
+  return byName ? byName.user_id : text;
+}
+
+async function loadPersonal() {
+  const userId = resolveUserId($("user").value);
+  const panel = $("personal");
+  if (!userId) { panel.replaceChildren(); $("status").textContent = ""; return; }
+
+  $("status").textContent = "Loading…";
+  const k = $("k").value;
+  const body = await (await fetch(
+    `/recommendations?user_id=${encodeURIComponent(userId)}&k=${k}`)).json();
+
+  panel.replaceChildren();
+  if (body.fallback_used) {
+    const warn = document.createElement("div");
+    warn.className = "banner";
+    warn.textContent =
+      `No history for "${userId}" — showing globally popular titles instead.`;
+    panel.appendChild(warn);
+  }
+  const g = grid(body.items);
+  panel.appendChild(g);
+  $("status").textContent = "";
+
+  // Recommendations are already explained. The LLM call upgrades the
+  // wording in place and is allowed to fail silently.
+  try {
+    const res = await fetch("/explain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        user_id: userId, item_ids: body.items.map((i) => i.item_id),
+      }),
+    });
+    if (!res.ok) return;
+    const out = await res.json();
+    out.explanations.forEach((e) => {
+      const node = g.querySelector(`[data-item-id="${CSS.escape(e.item_id)}"] .reason`);
+      if (node && e.source === "llm") {
+        node.textContent = e.reason;
+        node.classList.add("llm");
+      }
+    });
+  } catch (_) { /* native reasons remain on screen */ }
+}
+
+let timer;
+$("user").addEventListener("input", () => {
+  clearTimeout(timer);
+  timer = setTimeout(loadPersonal, 250);
+});
+$("k").addEventListener("change", loadPersonal);
+
+loadPopular();
+loadUsers();
+</script>
+</body>
+</html>
