@@ -22,6 +22,7 @@ from recsys.algorithms import build  # noqa: F401  - import registers algorithms
 from recsys.algorithms.base import Rec, Recommender
 from recsys.algorithms.signals import Signals
 from recsys.data import Dataset, load_dataset
+from recsys.explain import MissingApiKey, explain
 
 load_dotenv()
 logger = logging.getLogger("recsys")
@@ -79,6 +80,23 @@ class UserOut(BaseModel):
     user_id: str
     name: str
     region: str
+
+
+class ExplainIn(BaseModel):
+    user_id: str
+    item_ids: list[str]
+
+
+class ExplanationOut(BaseModel):
+    item_id: str
+    reason: str
+    source: str
+
+
+class ExplainOut(BaseModel):
+    explanations: list[ExplanationOut]
+    model: str
+    degraded: bool
 
 
 def _to_out(recs: list[Rec]) -> list[ItemOut]:
@@ -153,6 +171,41 @@ def recommendations(
         algorithm=state.algo.name,
         items=_to_out(recs),
         fallback_used=not known,
+    )
+
+
+@app.post("/explain", response_model=ExplainOut)
+def explain_recommendations(body: ExplainIn) -> ExplainOut:
+    state = get_state()
+    if not body.item_ids:
+        raise HTTPException(status_code=422, detail="item_ids must not be empty")
+
+    # Re-derive the recommendations so the evidence is the algorithm's own,
+    # never something the caller supplied.
+    ranked = state.algo.recommend_for_user(body.user_id, k=50)
+    wanted = set(body.item_ids)
+    recs = [rec for rec in ranked if rec.item_id in wanted]
+    if not recs:
+        raise HTTPException(status_code=404, detail="No recommendations match those item_ids")
+
+    user = state.ds.users.get(body.user_id)
+    try:
+        explanations, model, degraded = explain(
+            user_name=user.name if user else "a viewer",
+            genres=state.signals.top_genres(body.user_id),
+            recent_titles=state.signals.recent_titles(body.user_id),
+            recs=recs,
+        )
+    except MissingApiKey as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return ExplainOut(
+        explanations=[
+            ExplanationOut(item_id=e.item_id, reason=e.reason, source=e.source)
+            for e in explanations
+        ],
+        model=model,
+        degraded=degraded,
     )
 
 

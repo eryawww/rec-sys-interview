@@ -68,3 +68,22 @@ def test_root_serves_the_frontend():
     response = client.get("/")
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
+
+
+def test_explain_without_key_returns_503(monkeypatch):
+    monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    items = client.get("/recommendations?user_id=u1&k=3").json()["items"]
+    response = client.post(
+        "/explain", json={"user_id": "u1", "item_ids": [i["item_id"] for i in items]}
+    )
+    assert response.status_code == 503
+    assert "DEEPSEEK_API_KEY" in response.json()["detail"]
+
+
+def test_explain_rejects_empty_item_ids():
+    assert client.post("/explain", json={"user_id": "u1", "item_ids": []}).status_code == 422
+
+
+def test_explain_rejects_items_that_were_not_recommended():
+    response = client.post("/explain", json={"user_id": "u1", "item_ids": ["nope"]})
+    assert response.status_code == 404
