@@ -1,0 +1,376 @@
+<title>Watch-Threshold Tree Anatomy</title>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root { --paper:#f5f5f5; --paper2:#ececec; --ink:#2d3142; --muted:#4f5d75; --accent:#eb6c36; --soft:#7a8399; --rule:rgba(45,49,66,0.12); }
+:root:not([data-theme="light"]) { }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --paper:#2d3142; --paper2:#393e53; --ink:#f5f5f5; --muted:#b6bccb; --accent:#f08a59; --soft:#98a0b3; --rule:rgba(245,245,245,0.16); } }
+:root[data-theme="dark"] { --paper:#2d3142; --paper2:#393e53; --ink:#f5f5f5; --muted:#b6bccb; --accent:#f08a59; --soft:#98a0b3; --rule:rgba(245,245,245,0.16); }
+body { background:var(--paper); color:var(--ink); font-family:'Geist',system-ui,sans-serif; margin:0; padding:3rem 2rem 4rem; }
+.wrap { max-width:1280px; margin:0 auto; }
+.eyebrow { font-family:'Geist Mono',monospace; font-size:8px; letter-spacing:0.16em; text-transform:uppercase; color:var(--muted); margin:0 0 .5rem; }
+h1 { font-family:'Instrument Serif',Georgia,serif; font-size:2.25rem; font-weight:400; margin:0 0 .5rem; letter-spacing:-0.01em; }
+h2 { font-family:'Instrument Serif',Georgia,serif; font-size:1.5rem; font-weight:400; margin:0 0 .25rem; }
+.sub { color:var(--muted); font-size:.9rem; max-width:70ch; line-height:1.6; margin:0 0 2.5rem; }
+section { margin:3.5rem 0 0; }
+.note { color:var(--muted); font-size:.85rem; max-width:74ch; line-height:1.6; margin:.5rem 0 1.5rem; }
+.figure { overflow-x:auto; margin:1rem 0 0; }
+svg { display:block; min-width:640px; }
+.grid { display:grid; grid-template-columns:1.1fr 1fr 0.9fr; gap:1rem; margin-top:2.5rem; }
+@media (max-width:820px) { .grid { grid-template-columns:1fr; } }
+.card { background:var(--paper2); border:1px solid var(--rule); border-radius:6px; padding:1.25rem; }
+.card h3 { font-size:.95rem; margin:0 0 .6rem; font-weight:600; }
+.card-header { display:flex; align-items:center; gap:.5rem; }
+.card-dot { width:7px; height:7px; border-radius:50%; background:var(--muted); flex:none; }
+.card-dot.coral { background:var(--accent); }
+.card ul { margin:0; padding-left:1.1rem; color:var(--muted); font-size:.83rem; line-height:1.65; }
+table { border-collapse:collapse; width:100%; font-size:.83rem; margin-top:1rem; }
+th,td { text-align:left; padding:.45rem .7rem; border-bottom:1px solid var(--rule); }
+th { font-family:'Geist Mono',monospace; font-size:8px; letter-spacing:.12em; text-transform:uppercase; color:var(--muted); font-weight:500; }
+td.n { font-family:'Geist Mono',monospace; color:var(--muted); }
+footer { margin-top:4rem; padding-top:1rem; border-top:1px solid var(--rule); font-family:'Geist Mono',monospace; font-size:8px; letter-spacing:.1em; color:var(--soft); text-transform:uppercase; }
+</style>
+<div class="wrap">
+<p class="eyebrow">recsys · watch_threshold</p>
+<h1>Watch-Threshold Tree Anatomy</h1>
+<p class="sub">The <code>watch_threshold</code> algorithm ranks items by the predicted probability that a user watches past 600 seconds. The prediction is not one tree: it is a sum over 100 boosted trees, each 31 leaves wide and up to 20 levels deep. These three views go from the whole ensemble, to the top of the first tree, to its complete structure.</p>
+
+<section>
+<p class="eyebrow">1 · Overview</p>
+<h2>Prediction pipeline</h2>
+<p class="note">Every stage runs in sequence for a single user-item pair. The 100 trees each contribute one leaf value; those are summed, offset by the prior log-odds of the training labels, and squashed into the 0–1 score that orders the catalogue. Values shown are the real trace for user <code>u1</code> and item <code>i151</code> (<em>Hotel Transylvania Part 3</em>).</p>
+<div class="figure"><svg viewBox="0 0 1240 268" role="img" aria-labelledby="flow-title flow-desc" xmlns="http://www.w3.org/2000/svg">
+<title id="flow-title">How one recommendation probability is produced</title>
+<desc id="flow-desc">A feature row passes through one hundred boosted trees whose leaf values are summed, added to a baseline log-odds, and squashed by a sigmoid into a probability.</desc>
+<defs>
+<marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+<marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#f5f5f5"/>
+<line x1="220" y1="136.0" x2="272" y2="136.0" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+<rect x="235.6" y="112.0" width="28.799999999999997" height="12" rx="2" fill="#f5f5f5"/>
+<text x="250.0" y="121.0" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">ROW</text>
+<line x1="460" y1="136.0" x2="512" y2="136.0" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+<rect x="456.0" y="112.0" width="68.0" height="12" rx="2" fill="#f5f5f5"/>
+<text x="490.0" y="121.0" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">100 LEAVES</text>
+<line x1="700" y1="136.0" x2="752" y2="136.0" stroke="#4f5d75" stroke-width="1" marker-end="url(#arrow)"/>
+<rect x="701.6" y="112.0" width="56.8" height="12" rx="2" fill="#f5f5f5"/>
+<text x="730.0" y="121.0" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">LOG-ODDS</text>
+<line x1="940" y1="136.0" x2="992" y2="136.0" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<rect x="950.0" y="112.0" width="40.0" height="12" rx="2" fill="#f5f5f5"/>
+<text x="970.0" y="121.0" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">TOTAL</text>
+<rect x="40" y="96" width="180" height="80" rx="6" fill="#f5f5f5"/>
+<rect x="40" y="96" width="180" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="48" y="104" width="40" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.4" stroke-width="0.8"/>
+<text x="68.0" y="113" fill="#2d3142" fill-opacity="0.85" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">INPUT</text>
+<text x="130.0" y="142.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Feature row</text>
+<text x="130.0" y="164" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">235 columns</text>
+<rect x="280" y="96" width="180" height="80" rx="6" fill="#f5f5f5"/>
+<rect x="280" y="96" width="180" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="288" y="104" width="40" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.4" stroke-width="0.8"/>
+<text x="308.0" y="113" fill="#2d3142" fill-opacity="0.85" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">MODEL</text>
+<text x="370.0" y="142.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">100 boosted trees</text>
+<text x="370.0" y="164" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">31 leaves each</text>
+<rect x="520" y="96" width="180" height="80" rx="6" fill="#f5f5f5"/>
+<rect x="520" y="96" width="180" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="528" y="104" width="28" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.4" stroke-width="0.8"/>
+<text x="542.0" y="113" fill="#2d3142" fill-opacity="0.85" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">SUM</text>
+<text x="610.0" y="142.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">Σ leaf values</text>
+<text x="610.0" y="164" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">+1.56743</text>
+<rect x="760" y="96" width="180" height="80" rx="6" fill="#f5f5f5"/>
+<rect x="760" y="96" width="180" height="80" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<rect x="768" y="104" width="40" height="12" rx="2" fill="transparent" stroke="#2d3142" stroke-opacity="0.4" stroke-width="0.8"/>
+<text x="788.0" y="113" fill="#2d3142" fill-opacity="0.85" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">PRIOR</text>
+<text x="850.0" y="142.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">+ baseline log-odds</text>
+<text x="850.0" y="164" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">+0.63225</text>
+<rect x="1000" y="96" width="180" height="80" rx="6" fill="#f5f5f5"/>
+<rect x="1000" y="96" width="180" height="80" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+<rect x="1008" y="104" width="46" height="12" rx="2" fill="transparent" stroke="#eb6c36" stroke-opacity="0.4" stroke-width="0.8"/>
+<text x="1031.0" y="113" fill="#eb6c36" fill-opacity="0.85" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">OUTPUT</text>
+<text x="1090.0" y="142.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">σ( +2.19968 )</text>
+<text x="1090.0" y="164" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">0.9002</text>
+<line x1="32" y1="224" x2="1208" y2="224" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="32" y="240" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+<rect x="120" y="230" width="16" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/><text x="144" y="240" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif">stage</text>
+<rect x="204" y="230" width="16" height="12" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/><text x="228" y="240" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif">value returned to the caller</text>
+</svg></div>
+</section>
+
+<section>
+<p class="eyebrow">2 · Detail of stage 1.2</p>
+<h2>Decision path, tree 1 of 100</h2>
+<p class="note">Five successive tests route this pair to leaf 56. Each box is one node of tree 1; <code>n</code> is how many of the 5,000 training rows reach it. The first split isolates 70 rows on a single title word, and two of the five tests are on <code>age</code> — the only continuous feature, and the one the ensemble splits on most.</p>
+<div class="figure"><svg viewBox="0 0 1240 716" role="img" aria-labelledby="path-title path-desc" xmlns="http://www.w3.org/2000/svg">
+<title id="path-title">Decision path through booster tree 1</title>
+<desc id="path-desc">Five successive splits on title, age, region and content type route one user-item pair to a leaf carrying a log-odds increment.</desc>
+<defs>
+<marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+<marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+</defs>
+<rect width="100%" height="100%" fill="#f5f5f5"/>
+<rect x="440.0" y="40" width="360" height="64" rx="6" fill="#f5f5f5"/>
+<rect x="440.0" y="40" width="360" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="456.0" y="66" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist Mono', monospace">title~cemara ≤ 0.5</text>
+<text x="456.0" y="86" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">observed 0</text>
+<text x="784.0" y="86" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">n = 5000</text>
+<line x1="620.0" y1="104" x2="620.0" y2="140" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<rect x="632.0" y="112.0" width="38" height="12" rx="2" fill="#f5f5f5"/>
+<text x="651.0" y="121.0" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">LEFT</text>
+<rect x="440.0" y="148" width="360" height="64" rx="6" fill="#f5f5f5"/>
+<rect x="440.0" y="148" width="360" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="456.0" y="174" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist Mono', monospace">age ≤ 22.5</text>
+<text x="456.0" y="194" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">observed 55</text>
+<text x="784.0" y="194" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">n = 4930</text>
+<line x1="620.0" y1="212" x2="620.0" y2="248" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<rect x="632.0" y="220.0" width="44" height="12" rx="2" fill="#f5f5f5"/>
+<text x="654.0" y="229.0" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RIGHT</text>
+<rect x="440.0" y="256" width="360" height="64" rx="6" fill="#f5f5f5"/>
+<rect x="440.0" y="256" width="360" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="456.0" y="282" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist Mono', monospace">region=Bandung ≤ 0.5</text>
+<text x="456.0" y="302" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">observed 1</text>
+<text x="784.0" y="302" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">n = 3878</text>
+<line x1="620.0" y1="320" x2="620.0" y2="356" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<rect x="632.0" y="328.0" width="44" height="12" rx="2" fill="#f5f5f5"/>
+<text x="654.0" y="337.0" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RIGHT</text>
+<rect x="440.0" y="364" width="360" height="64" rx="6" fill="#f5f5f5"/>
+<rect x="440.0" y="364" width="360" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="456.0" y="390" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist Mono', monospace">age ≤ 48.5</text>
+<text x="456.0" y="410" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">observed 55</text>
+<text x="784.0" y="410" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">n = 337</text>
+<line x1="620.0" y1="428" x2="620.0" y2="464" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<rect x="632.0" y="436.0" width="44" height="12" rx="2" fill="#f5f5f5"/>
+<text x="654.0" y="445.0" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">RIGHT</text>
+<rect x="440.0" y="472" width="360" height="64" rx="6" fill="#f5f5f5"/>
+<rect x="440.0" y="472" width="360" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+<text x="456.0" y="498" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist Mono', monospace">type=series ≤ 0.5</text>
+<text x="456.0" y="518" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace">observed 0</text>
+<text x="784.0" y="518" fill="#7a8399" font-size="9" font-family="'Geist Mono', monospace" text-anchor="end">n = 62</text>
+<line x1="620.0" y1="536" x2="620.0" y2="572" stroke="#eb6c36" stroke-width="1.4" marker-end="url(#arrow-accent)"/>
+<rect x="632.0" y="544.0" width="38" height="12" rx="2" fill="#f5f5f5"/>
+<text x="651.0" y="553.0" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.06em">LEFT</text>
+<rect x="440.0" y="580" width="360" height="64" rx="6" fill="#f5f5f5"/>
+<rect x="440.0" y="580" width="360" height="64" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+<rect x="448.0" y="588" width="34" height="12" rx="2" fill="transparent" stroke="#eb6c36" stroke-opacity="0.4" stroke-width="0.8"/>
+<text x="465.0" y="597" fill="#eb6c36" fill-opacity="0.85" font-size="7" font-family="'Geist Mono', monospace" text-anchor="middle" letter-spacing="0.08em">LEAF</text>
+<text x="620.0" y="618.0" fill="#2d3142" font-size="12" font-weight="600" font-family="'Geist', sans-serif" text-anchor="middle">leaf 56 · +0.02074</text>
+<text x="620.0" y="632" fill="#4f5d75" font-size="9" font-family="'Geist Mono', monospace" text-anchor="middle">1 of 100 log-odds increments · n = 30</text>
+<line x1="32" y1="672" x2="1208" y2="672" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="32" y="688" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+<rect x="120" y="678" width="16" height="12" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/><text x="144" y="688" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif">split test</text>
+<rect x="228" y="678" width="16" height="12" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/><text x="252" y="688" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif">leaf reached</text>
+</svg></div>
+</section>
+
+<section>
+<p class="eyebrow">2.1 · Complete structure</p>
+<h2>Booster tree 1, all 61 nodes</h2>
+<p class="note">The same tree in full: 30 split nodes, 31 leaves, maximum depth 20. Labels are shown for the top four levels and for every node on the traced path. The shape is characteristic — a few wide splits near the root, then a long thin chain, which is what a tree does when it is separating small groups of rows rather than finding a general rule.</p>
+<div class="figure"><svg viewBox="0 0 1312 952" role="img" aria-labelledby="tree1-title tree1-desc" xmlns="http://www.w3.org/2000/svg">
+<title id="tree1-title">Complete structure of booster tree 1</title>
+<desc id="tree1-desc">Dendrogram of the 61 nodes and 31 leaves of the first boosted tree, with the decision path taken for one user-item pair highlighted.</desc>
+<rect width="100%" height="100%" fill="#f5f5f5"/>
+<path d="M 905.6089553833008 56 V 70.0 Q 905.6089553833008 76.0 899.6089553833008 76.0 H 581.2179107666016 Q 575.2179107666016 76.0 575.2179107666016 82.0 V 96" fill="none" stroke="#eb6c36" stroke-width="1.6"/>
+<path d="M 905.6089553833008 56 V 70.0 Q 905.6089553833008 76.0 911.6089553833008 76.0 H 1230.0 Q 1236.0 76.0 1236.0 82.0 V 96" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 575.2179107666016 96 V 110.0 Q 575.2179107666016 116.0 569.2179107666016 116.0 H 112.0 Q 106.0 116.0 106.0 122.0 V 136" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 575.2179107666016 96 V 110.0 Q 575.2179107666016 116.0 581.2179107666016 116.0 H 1038.4358215332031 Q 1044.4358215332031 116.0 1044.4358215332031 122.0 V 136" fill="none" stroke="#eb6c36" stroke-width="1.6"/>
+<path d="M 106.0 136 V 150.0 Q 106.0 156.0 100.0 156.0 H 82.0 Q 76.0 156.0 76.0 162.0 V 176" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 106.0 136 V 150.0 Q 106.0 156.0 112.0 156.0 H 130 Q 136 156.0 136 162.0 V 176" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 76.0 176 V 190.0 Q 76.0 196.0 70.0 196.0 H 62 Q 56 196.0 56 202.0 V 216" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 76.0 176 V 190.0 Q 76.0 196.0 82.0 196.0 H 90 Q 96 196.0 96 202.0 V 216" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 1044.4358215332031 136 V 150.0 Q 1044.4358215332031 156.0 1038.4358215332031 156.0 H 978.8716430664062 Q 972.8716430664062 156.0 972.8716430664062 162.0 V 176" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 1044.4358215332031 136 V 150.0 Q 1044.4358215332031 156.0 1050.4358215332031 156.0 H 1110.0 Q 1116.0 156.0 1116.0 162.0 V 176" fill="none" stroke="#eb6c36" stroke-width="1.6"/>
+<path d="M 972.8716430664062 176 V 190.0 Q 972.8716430664062 196.0 966.8716430664062 196.0 H 935.7432861328125 Q 929.7432861328125 196.0 929.7432861328125 202.0 V 216" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 972.8716430664062 176 V 190.0 Q 972.8716430664062 196.0 978.8716430664062 196.0 H 1010 Q 1016 196.0 1016 202.0 V 216" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 929.7432861328125 216 V 230.0 Q 929.7432861328125 236.0 923.7432861328125 236.0 H 889.486572265625 Q 883.486572265625 236.0 883.486572265625 242.0 V 256" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 929.7432861328125 216 V 230.0 Q 929.7432861328125 236.0 935.7432861328125 236.0 H 970 Q 976 236.0 976 242.0 V 256" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 883.486572265625 256 V 270.0 Q 883.486572265625 276.0 877.486572265625 276.0 H 836.97314453125 Q 830.97314453125 276.0 830.97314453125 282.0 V 296" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 883.486572265625 256 V 270.0 Q 883.486572265625 276.0 889.486572265625 276.0 H 930 Q 936 276.0 936 282.0 V 296" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 830.97314453125 296 V 310.0 Q 830.97314453125 316.0 824.97314453125 316.0 H 771.9462890625 Q 765.9462890625 316.0 765.9462890625 322.0 V 336" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 830.97314453125 296 V 310.0 Q 830.97314453125 316.0 836.97314453125 316.0 H 890 Q 896 316.0 896 322.0 V 336" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 765.9462890625 336 V 350.0 Q 765.9462890625 356.0 759.9462890625 356.0 H 701.892578125 Q 695.892578125 356.0 695.892578125 362.0 V 376" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 765.9462890625 336 V 350.0 Q 765.9462890625 356.0 771.9462890625 356.0 H 830.0 Q 836.0 356.0 836.0 362.0 V 376" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 695.892578125 376 V 390.0 Q 695.892578125 396.0 689.892578125 396.0 H 641.78515625 Q 635.78515625 396.0 635.78515625 402.0 V 416" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 695.892578125 376 V 390.0 Q 695.892578125 396.0 701.892578125 396.0 H 750.0 Q 756.0 396.0 756.0 402.0 V 416" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 635.78515625 416 V 430.0 Q 635.78515625 436.0 629.78515625 436.0 H 581.5703125 Q 575.5703125 436.0 575.5703125 442.0 V 456" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 635.78515625 416 V 430.0 Q 635.78515625 436.0 641.78515625 436.0 H 690 Q 696 436.0 696 442.0 V 456" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 575.5703125 456 V 470.0 Q 575.5703125 476.0 569.5703125 476.0 H 501.140625 Q 495.140625 476.0 495.140625 482.0 V 496" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 575.5703125 456 V 470.0 Q 575.5703125 476.0 581.5703125 476.0 H 650 Q 656 476.0 656 482.0 V 496" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 495.140625 496 V 510.0 Q 495.140625 516.0 489.140625 516.0 H 400.28125 Q 394.28125 516.0 394.28125 522.0 V 536" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 495.140625 496 V 510.0 Q 495.140625 516.0 501.140625 516.0 H 590.0 Q 596.0 516.0 596.0 522.0 V 536" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 394.28125 536 V 550.0 Q 394.28125 556.0 388.28125 556.0 H 258.5625 Q 252.5625 556.0 252.5625 562.0 V 576" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 394.28125 536 V 550.0 Q 394.28125 556.0 400.28125 556.0 H 530 Q 536 556.0 536 562.0 V 576" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 252.5625 576 V 590.0 Q 252.5625 596.0 246.5625 596.0 H 182 Q 176 596.0 176 602.0 V 616" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 252.5625 576 V 590.0 Q 252.5625 596.0 258.5625 596.0 H 323.125 Q 329.125 596.0 329.125 602.0 V 616" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 329.125 616 V 630.0 Q 329.125 636.0 323.125 636.0 H 222 Q 216 636.0 216 642.0 V 656" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 329.125 616 V 630.0 Q 329.125 636.0 335.125 636.0 H 436.25 Q 442.25 636.0 442.25 642.0 V 656" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 442.25 656 V 670.0 Q 442.25 676.0 436.25 676.0 H 394.5 Q 388.5 676.0 388.5 682.0 V 696" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 442.25 656 V 670.0 Q 442.25 676.0 448.25 676.0 H 490 Q 496 676.0 496 682.0 V 696" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 388.5 696 V 710.0 Q 388.5 716.0 382.5 716.0 H 347.0 Q 341.0 716.0 341.0 722.0 V 736" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 388.5 696 V 710.0 Q 388.5 716.0 394.5 716.0 H 430.0 Q 436.0 716.0 436.0 722.0 V 736" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 341.0 736 V 750.0 Q 341.0 756.0 335.0 756.0 H 312.0 Q 306.0 756.0 306.0 762.0 V 776" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 341.0 736 V 750.0 Q 341.0 756.0 347.0 756.0 H 370 Q 376 756.0 376 762.0 V 776" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 306.0 776 V 790.0 Q 306.0 796.0 300.0 796.0 H 282.0 Q 276.0 796.0 276.0 802.0 V 816" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 306.0 776 V 790.0 Q 306.0 796.0 312.0 796.0 H 330 Q 336 796.0 336 802.0 V 816" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 276.0 816 V 830.0 Q 276.0 836.0 270.0 836.0 H 262 Q 256 836.0 256 842.0 V 856" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 276.0 816 V 830.0 Q 276.0 836.0 282.0 836.0 H 290 Q 296 836.0 296 842.0 V 856" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 436.0 736 V 750.0 Q 436.0 756.0 430.0 756.0 H 422 Q 416 756.0 416 762.0 V 776" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 436.0 736 V 750.0 Q 436.0 756.0 442.0 756.0 H 450 Q 456 756.0 456 762.0 V 776" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 596.0 536 V 550.0 Q 596.0 556.0 590.0 556.0 H 582 Q 576 556.0 576 562.0 V 576" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 596.0 536 V 550.0 Q 596.0 556.0 602.0 556.0 H 610 Q 616 556.0 616 562.0 V 576" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 756.0 416 V 430.0 Q 756.0 436.0 750.0 436.0 H 742 Q 736 436.0 736 442.0 V 456" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 756.0 416 V 430.0 Q 756.0 436.0 762.0 436.0 H 770 Q 776 436.0 776 442.0 V 456" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 836.0 376 V 390.0 Q 836.0 396.0 830.0 396.0 H 822 Q 816 396.0 816 402.0 V 416" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 836.0 376 V 390.0 Q 836.0 396.0 842.0 396.0 H 850 Q 856 396.0 856 402.0 V 416" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 1116.0 176 V 190.0 Q 1116.0 196.0 1110.0 196.0 H 1082.0 Q 1076.0 196.0 1076.0 202.0 V 216" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 1116.0 176 V 190.0 Q 1116.0 196.0 1122.0 196.0 H 1150.0 Q 1156.0 196.0 1156.0 202.0 V 216" fill="none" stroke="#eb6c36" stroke-width="1.6"/>
+<path d="M 1076.0 216 V 230.0 Q 1076.0 236.0 1070.0 236.0 H 1062 Q 1056 236.0 1056 242.0 V 256" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 1076.0 216 V 230.0 Q 1076.0 236.0 1082.0 236.0 H 1090 Q 1096 236.0 1096 242.0 V 256" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 1156.0 216 V 230.0 Q 1156.0 236.0 1150.0 236.0 H 1142 Q 1136 236.0 1136 242.0 V 256" fill="none" stroke="#eb6c36" stroke-width="1.6"/>
+<path d="M 1156.0 216 V 230.0 Q 1156.0 236.0 1162.0 236.0 H 1170 Q 1176 236.0 1176 242.0 V 256" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 1236.0 96 V 110.0 Q 1236.0 116.0 1230.0 116.0 H 1222 Q 1216 116.0 1216 122.0 V 136" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<path d="M 1236.0 96 V 110.0 Q 1236.0 116.0 1242.0 116.0 H 1250 Q 1256 116.0 1256 122.0 V 136" fill="none" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+<circle cx="905.6089553833008" cy="56" r="5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="1.6"/>
+<circle cx="575.2179107666016" cy="96" r="5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="1.6"/>
+<circle cx="106.0" cy="136" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="76.0" cy="176" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<rect x="51" y="211" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="91" y="211" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="131" y="171" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<circle cx="1044.4358215332031" cy="136" r="5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="1.6"/>
+<circle cx="972.8716430664062" cy="176" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="929.7432861328125" cy="216" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="883.486572265625" cy="256" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="830.97314453125" cy="296" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="765.9462890625" cy="336" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="695.892578125" cy="376" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="635.78515625" cy="416" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="575.5703125" cy="456" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="495.140625" cy="496" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="394.28125" cy="536" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="252.5625" cy="576" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<rect x="171" y="611" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<circle cx="329.125" cy="616" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<rect x="211" y="651" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<circle cx="442.25" cy="656" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="388.5" cy="696" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="341.0" cy="736" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="306.0" cy="776" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<circle cx="276.0" cy="816" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<rect x="251" y="851" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="291" y="851" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="331" y="811" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="371" y="771" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<circle cx="436.0" cy="736" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<rect x="411" y="771" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="451" y="771" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="491" y="691" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="531" y="571" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<circle cx="596.0" cy="536" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<rect x="571" y="571" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="611" y="571" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="651" y="491" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="691" y="451" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<circle cx="756.0" cy="416" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<rect x="731" y="451" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="771" y="451" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<circle cx="836.0" cy="376" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<rect x="811" y="411" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="851" y="411" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="891" y="331" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="931" y="291" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="971" y="251" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="1011" y="211" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<circle cx="1116.0" cy="176" r="5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="1.6"/>
+<circle cx="1076.0" cy="216" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<rect x="1051" y="251" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="1091" y="251" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<circle cx="1156.0" cy="216" r="5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="1.6"/>
+<rect x="1131" y="251" width="10" height="10" rx="2" fill="rgba(235,108,54,0.14)" stroke="#eb6c36" stroke-width="1.2"/>
+<rect x="1171" y="251" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<circle cx="1236.0" cy="96" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/>
+<rect x="1211" y="131" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="1251" y="131" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/>
+<rect x="867.2089553833008" y="33" width="76.80000000000001" height="13" rx="2" fill="#f5f5f5"/>
+<text x="905.6089553833008" y="42" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">title~cemara</text>
+<rect x="542.2179107666016" y="73" width="66.0" height="13" rx="2" fill="#f5f5f5"/>
+<text x="575.2179107666016" y="82" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">age ≤ 22.5</text>
+<rect x="67.6" y="113" width="76.80000000000001" height="13" rx="2" fill="#f5f5f5"/>
+<text x="106.0" y="122" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">genre=comedy</text>
+<rect x="29.5" y="153" width="93.0" height="13" rx="2" fill="#f5f5f5"/>
+<text x="76.0" y="162" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">region=Surabaya</text>
+<rect x="1000.6358215332032" y="113" width="87.60000000000001" height="13" rx="2" fill="#f5f5f5"/>
+<text x="1044.4358215332031" y="122" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">region=Bandung</text>
+<rect x="926.3716430664062" y="153" width="93.0" height="13" rx="2" fill="#f5f5f5"/>
+<text x="972.8716430664062" y="162" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">region=Denpasar</text>
+<rect x="1083.0" y="153" width="66.0" height="13" rx="2" fill="#f5f5f5"/>
+<text x="1116.0" y="162" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">age ≤ 48.5</text>
+<rect x="1120.3" y="193" width="71.4" height="13" rx="2" fill="#f5f5f5"/>
+<text x="1156.0" y="202" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">type=series</text>
+<rect x="1200.3" y="73" width="71.4" height="13" rx="2" fill="#f5f5f5"/>
+<text x="1236.0" y="82" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">title~s1e16</text>
+<rect x="1106" y="266" width="60" height="13" rx="2" fill="#f5f5f5"/>
+<text x="1136" y="276" fill="#eb6c36" font-size="8" font-family="'Geist Mono', monospace" text-anchor="middle">+0.02074</text>
+<text x="16" y="59" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">d0</text>
+<text x="16" y="219" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">d4</text>
+<text x="16" y="379" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">d8</text>
+<text x="16" y="539" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">d12</text>
+<text x="16" y="699" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">d16</text>
+<text x="16" y="859" fill="#7a8399" font-size="8" font-family="'Geist Mono', monospace">d20</text>
+<line x1="30" y1="914" x2="1282" y2="914" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+<text x="30" y="930" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.14em">LEGEND</text>
+<circle cx="120" cy="926" r="3.5" fill="#f5f5f5" stroke="#2d3142" stroke-width="0.9"/><text x="132" y="930" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif">split node</text>
+<rect x="228" y="921" width="10" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="0.8"/><text x="246" y="930" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif">leaf (31)</text>
+<circle cx="336" cy="926" r="5" fill="#f5f5f5" stroke="#eb6c36" stroke-width="1.6"/><text x="348" y="930" fill="#4f5d75" font-size="9" font-family="'Geist', sans-serif">path taken for u1 → i151</text>
+</svg></div>
+</section>
+
+<section>
+<p class="eyebrow">3 · What the ensemble splits on</p>
+<h2>Split features across all 100 trees</h2>
+<p class="note">3,000 splits in total, spread over 151 of the 235 available features.</p>
+<table>
+<tr><th>feature</th><th>splits</th><th>share</th></tr>
+<tr><td class="n">age</td><td class="n">820</td><td class="n">27.3%</td></tr>
+<tr><td class="n">gender=F</td><td class="n">176</td><td class="n">5.9%</td></tr>
+<tr><td class="n">title~part</td><td class="n">84</td><td class="n">2.8%</td></tr>
+<tr><td class="n">content_type=series</td><td class="n">67</td><td class="n">2.2%</td></tr>
+<tr><td class="n">genre=romance</td><td class="n">62</td><td class="n">2.1%</td></tr>
+<tr><td class="n">region=Surabaya</td><td class="n">44</td><td class="n">1.5%</td></tr>
+<tr><td class="n">genre=thriller</td><td class="n">42</td><td class="n">1.4%</td></tr>
+</table>
+</section>
+
+<div class="grid">
+<div class="card">
+<p class="eyebrow">Reading the tree</p>
+<div class="card-header"><span class="card-dot"></span><h3>Leaf values are log-odds, not probabilities</h3></div>
+<ul>
+<li>Each leaf carries an increment between −0.178 and +0.113.</li>
+<li>The sum of 100 increments for this pair is +1.567.</li>
+<li>Only after adding the +0.632 baseline and applying the sigmoid does a probability exist.</li>
+<li>No single tree, and no single leaf, decides the ranking.</li>
+</ul>
+</div>
+<div class="card">
+<p class="eyebrow">Feature reach</p>
+<div class="card-header"><span class="card-dot"></span><h3>age dominates the splits</h3></div>
+<ul>
+<li>age takes 27.3% of all 3,000 splits.</li>
+<li>It is the only continuous feature, so a tree can cut it repeatedly at different thresholds.</li>
+<li>The 213 title unigrams together supply most of the remaining split variety.</li>
+<li>84 of the 235 features are never split on at all.</li>
+</ul>
+</div>
+<div class="card">
+<p class="eyebrow">Bound on the output</p>
+<div class="card-header"><span class="card-dot coral"></span><h3>Structure is fitted to noise</h3></div>
+<ul>
+<li>The root split separates 70 of 5,000 rows on one title word.</li>
+<li>Depth 20 with 31 leaves means long chains isolating small groups.</li>
+<li>Held-out AUC at this threshold is 0.515, against 0.522 for shuffled labels.</li>
+<li>The tree structure is real; the rule it encodes does not generalise.</li>
+</ul>
+</div>
+</div>
+
+<footer>recsys · watch_threshold · booster tree 1 of 100 · traced for u1 → i151</footer>
+</div>

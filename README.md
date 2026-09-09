@@ -42,7 +42,7 @@ globally popular list.
 RECSYS_ALGO=popularity uv run uvicorn recsys.api:app --port 8000
 ```
 
-Shipped: `popularity`, `item_knn` (default).
+Shipped: `popularity`, `item_knn` (default), `watch_threshold`.
 
 To add one, create `src/recsys/algorithms/<name>.py`:
 
@@ -104,6 +104,50 @@ accuracy is not one of them:
 The analysis is in `docs/recommender-research.md`; the scripts that
 produce it are in `research/`.
 
+## Decision tree visualizations
+
+`watch_threshold` ranks items by the predicted probability that a user
+watches past `RECSYS_WATCH_THRESHOLD_SECONDS` (default 600), from a
+gradient-boosted tree over `(age, gender, region, content_type, genre,
+title unigrams)`. It is a plug-in alongside the other algorithms:
+
+```bash
+RECSYS_ALGO=watch_threshold uv run uvicorn recsys.api:app --port 8000
+```
+
+A prediction is a sum over **100 boosted trees**, each 31 leaves wide and
+up to 20 levels deep — 3,000 splits in total. Every one is rendered:
+
+[![All 100 booster trees](decision-visualized/all-trees-contact-sheet.png)](decision-visualized/all-trees-contact-sheet.png)
+
+| | |
+|---|---|
+| `decision-visualized/tree-001.png` … `tree-100.png` | one tree each, labelled to depth 3 |
+| `decision-visualized/all-trees-contact-sheet.png` | all 100 shapes at a glance |
+| `docs/decision-tree.html` | prediction pipeline, a traced decision path, and tree 1 in full |
+
+Regenerate with:
+
+```bash
+uv run python research/render_trees.py
+```
+
+Two things the shapes show. **`age` takes 27.3% of all 3,000 splits** —
+it is the only continuous feature, so a tree can re-cut it at many
+thresholds while every other feature is binary and splits once. And the
+trees run **20 levels deep to reach 31 leaves**: a few wide splits near
+the root, then long thin chains peeling off small groups of rows. The
+root split of tree 1 is `title~cemara`, isolating 70 of 5,000 rows on a
+single title word.
+
+That shape is what fitting noise looks like, and it agrees with the
+measurement — held-out AUC at K=600 is 0.515, against 0.522 for
+deliberately shuffled labels, with accuracy never beating the
+majority-class rate. Sweeping the threshold from 30 to 3000 seconds does
+not change it (`research/binary_threshold_clf.py`), and the same features
+predict `event_type` no better (`research/event_type_clf.py`). The
+structure is real; the rule it encodes does not generalise.
+
 ## Explanations
 
 Two layers over one evidence object:
@@ -131,3 +175,4 @@ Runs offline; no API key needed.
 - `docs/superpowers/specs/2026-09-09-recommender-system-design.md` — design spec
 - `docs/superpowers/plans/2026-09-09-recommender-system.md` — implementation plan
 - `docs/recommender-research.md` — dataset analysis and algorithm survey
+- `docs/decision-tree.html` — `watch_threshold` model anatomy
