@@ -18,7 +18,8 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from recsys.algorithms import build  # noqa: F401  - import registers algorithms
+# Importing the package registers every shipped algorithm in REGISTRY.
+from recsys.algorithms import build
 from recsys.algorithms.base import Rec, Recommender
 from recsys.algorithms.signals import Signals
 from recsys.data import Dataset, load_dataset

@@ -95,6 +95,7 @@ def test_empty_content_degrades():
 
     out, _, degraded = explain("Ada", ["drama"], [], RECS, client=make_client(handler))
     assert degraded is True
+    assert all(e.source == "native" for e in out)
 
 
 def test_partial_response_degrades_only_the_missing_item():
