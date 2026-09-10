@@ -123,6 +123,56 @@ consistent with uniform random sampling of (user, item) pairs. The
 analysis is in `docs/recommender-research.md`; the scripts that produce
 it are in `research/`.
 
+### Project Structure
+
+```
+src/recsys/
+  data.py                    CSV -> User/Item/Event records + LoadReport
+  api.py                     FastAPI app; resolves RECSYS_ALGO once at startup
+  explain.py                 DeepSeek call; degrades to native reasons
+  web/index.html             single-file frontend, no build step
+  algorithms/
+    base.py                  Recommender ABC, Rec dataclass, REGISTRY, build()
+    signals.py               event weights, affinity matrix, heavily-watched
+    popularity.py            global ranking; the fallback for every algorithm
+    item_knn.py              default; cosine item-item neighbourhoods
+    watch_threshold.py       gradient-boosted P(watch_seconds > K)
+
+tests/
+  test_algorithms.py         shared contract, parametrized over REGISTRY
+  test_base.py               registry and Rec construction
+  test_data.py               loading, coercion, quarantine
+  test_signals.py            weighting and heavily-watched rules
+  test_item_knn.py           algorithm-specific behaviour
+  test_watch_threshold.py    algorithm-specific behaviour
+  test_api.py                routes, k handling, fallback contract
+  test_explain.py            LLM degradation paths
+
+data/                        users.csv, items.csv, events.csv
+research/                    evaluation and diagnostic scripts (see below)
+decision-visualized/         100 booster-tree PNGs + contact sheet
+docs/                        research write-up, model anatomy, spec, plan
+pyproject.toml               deps, pytest and ruff configuration
+```
+
+Adding an algorithm means adding one file under `algorithms/` and one
+import line. Nothing in `api.py`, `data.py` or the contract suite
+changes — the registry is the only coupling point.
+
+The scripts in `research/` are the evidence behind the accuracy claims
+above, and each runs standalone:
+
+| script | what it measures |
+|---|---|
+| `benchmark_algorithms.py` | 19 configurations, temporal leave-last-out |
+| `kfold_eval.py` | 5-fold CV with paired bootstrap against random |
+| `significance_test.py` | repeated splits, confidence intervals |
+| `sequential_signal.py` | session structure and genre transitions |
+| `watchsec_regression.py` | predicting `watch_seconds` from side features |
+| `binary_threshold_clf.py` | `watch_seconds > K` swept across ten thresholds |
+| `event_type_clf.py` | predicting `event_type` from side features |
+| `render_trees.py` | regenerates `decision-visualized/` from the model |
+
 ## API Docs
 
 | Method | Path | Example |
